@@ -473,11 +473,13 @@ function getLogoDims(radius) {
 
 function draw() {
   ctx.clearRect(0, 0, canvasW, canvasH);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
 
   // 1. Twin image
   ctx.drawImage(twinImg, imgX, imgY, imgW, imgH);
 
-  // 2. Zone glow (only when cursor logo is valid on body)
+  // 2. Zone glow (only when cursor logo is valid on body — desktop only)
   if (activeZone && logoOnBody && mouseOnScreen) {
     const z = activeZone;
     const maxR = Math.max(z.srx, z.sry) * 2.2;
@@ -491,39 +493,61 @@ function draw() {
   }
 
   // 3. Planted tattoos
+  const selIdx = isMobile ? mobileSelected : -1;
   for (let i = 0; i < plantedTattoos.length; i++) {
     const t = plantedTattoos[i];
+    const isSelected = (i === selIdx);
+
+    // Selection ring on mobile
+    if (isSelected) {
+      ctx.save();
+      ctx.translate(t.x, t.y);
+      ctx.rotate(t.rotation);
+      const ringPad = 6;
+      const rw = t.w + ringPad * 2, rh = t.h + ringPad * 2;
+      ctx.strokeStyle = 'rgba(252,95,43,0.6)';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 4]);
+      ctx.lineDashOffset = -time * 20;
+      ctx.strokeRect(-rw / 2, -rh / 2, rw, rh);
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+
     ctx.save();
     ctx.translate(t.x, t.y);
     ctx.rotate(t.rotation);
-    ctx.globalAlpha = 0.85;
+    ctx.globalAlpha = isSelected ? 1.0 : 0.85;
     ctx.drawImage(logoImg, -t.w / 2, -t.h / 2, t.w, t.h);
     ctx.globalAlpha = 1;
     ctx.restore();
 
-    // Delete button (top-right corner of rotated logo)
-    const btnR = 8;
+    // Delete button — bigger on mobile
+    const btnR = isMobile ? 12 : 8;
     const cs = Math.cos(t.rotation), sn = Math.sin(t.rotation);
     const bx = t.x + (t.w / 2) * cs - (-t.h / 2) * sn;
     const by = t.y + (t.w / 2) * sn + (-t.h / 2) * cs;
-    t._bx = bx; t._by = by; t._br = btnR + 4;
+    t._bx = bx; t._by = by; t._br = btnR + (isMobile ? 8 : 4);
 
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(bx, by, btnR, 0, Math.PI * 2);
-    ctx.fillStyle = hoverDeleteIdx === i ? '#FC5F2B' : 'rgba(0,0,0,0.45)';
-    ctx.fill();
-    ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5;
-    const xs = 3.5;
-    ctx.beginPath();
-    ctx.moveTo(bx - xs, by - xs); ctx.lineTo(bx + xs, by + xs);
-    ctx.moveTo(bx + xs, by - xs); ctx.lineTo(bx - xs, by + xs);
-    ctx.stroke();
-    ctx.restore();
+    // Only show delete button on desktop hover, or on mobile for selected tattoo
+    if (!isMobile || isSelected) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(bx, by, btnR, 0, Math.PI * 2);
+      ctx.fillStyle = hoverDeleteIdx === i ? '#FC5F2B' : 'rgba(0,0,0,0.5)';
+      ctx.fill();
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5;
+      const xs = isMobile ? 5 : 3.5;
+      ctx.beginPath();
+      ctx.moveTo(bx - xs, by - xs); ctx.lineTo(bx + xs, by + xs);
+      ctx.moveTo(bx + xs, by - xs); ctx.lineTo(bx - xs, by + xs);
+      ctx.stroke();
+      ctx.restore();
+    }
   }
 
-  // 4. Cursor logo (with boundary enforcement)
-  if (mouseOnScreen) {
+  // 4. Cursor logo — desktop only
+  if (mouseOnScreen && !isMobile) {
     const { w, h } = getLogoDims(tattooRadius);
     logoOnBody = logoFullyOnBody(smoothX, smoothY, w, h, logoRotation);
     ctx.save();
@@ -533,7 +557,7 @@ function draw() {
     ctx.drawImage(logoImg, -w / 2, -h / 2, w, h);
     ctx.globalAlpha = 1;
     ctx.restore();
-  } else {
+  } else if (!isMobile) {
     logoOnBody = false;
   }
 }
@@ -594,7 +618,7 @@ function updateUI() {
 
 function resize() {
   if (!ready) return;
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const dpr = window.devicePixelRatio || 1;
   canvasW = window.innerWidth;
   canvasH = window.innerHeight;
   canvas.width = canvasW * dpr;
@@ -642,8 +666,9 @@ window.addEventListener('mousemove', e => {
 window.addEventListener('mouseleave', () => { mouseOnScreen = false; });
 window.addEventListener('mouseenter', () => { mouseOnScreen = true; });
 
-// Click: plant tattoo or delete
+// Click: plant tattoo or delete (desktop only)
 window.addEventListener('click', e => {
+  if (isMobile) return;
   for (let i = 0; i < plantedTattoos.length; i++) {
     const t = plantedTattoos[i];
     if (t._bx !== undefined) {
@@ -687,20 +712,22 @@ window.addEventListener('wheel', e => {
   }
 }, { passive: false });
 
-// Safari gesture events: two-finger twist = rotate, pinch = resize
-let gestureBaseRotation = 0;
-let gestureBaseRadius = 0;
-window.addEventListener('gesturestart', e => {
-  e.preventDefault();
-  gestureBaseRotation = logoRotation;
-  gestureBaseRadius = tattooRadius;
-});
-window.addEventListener('gesturechange', e => {
-  e.preventDefault();
-  logoRotation = gestureBaseRotation + e.rotation * Math.PI / 180;
-  tattooRadius = Math.max(8, Math.min(160, gestureBaseRadius * e.scale));
-});
-window.addEventListener('gestureend', e => { e.preventDefault(); });
+// Safari gesture events — only on desktop (touch handling covers mobile)
+if (!isMobile) {
+  let gestureBaseRotation = 0;
+  let gestureBaseRadius = 0;
+  window.addEventListener('gesturestart', e => {
+    e.preventDefault();
+    gestureBaseRotation = logoRotation;
+    gestureBaseRadius = tattooRadius;
+  });
+  window.addEventListener('gesturechange', e => {
+    e.preventDefault();
+    logoRotation = gestureBaseRotation + e.rotation * Math.PI / 180;
+    tattooRadius = Math.max(8, Math.min(160, gestureBaseRadius * e.scale));
+  });
+  window.addEventListener('gestureend', e => { e.preventDefault(); });
+}
 
 // Rotation: [ and ] keys
 window.addEventListener('keydown', e => {
@@ -708,95 +735,163 @@ window.addEventListener('keydown', e => {
   if (e.key === ']') logoRotation += Math.PI / 12;
 });
 
-// Touch support
+// ─── Mobile: place-then-adjust interaction (like stickers) ───
+let mobileSelected = -1;       // index of selected tattoo
+let mobileDragging = false;
+let mobileDragOffX = 0, mobileDragOffY = 0;
 let lastTouchAngle = null;
 let lastPinchDist = null;
 let touchMoved = false;
 let touchStartTime = 0;
 let touchStartX = 0, touchStartY = 0;
+let pinchBaseRadius = 0;
+let pinchBaseRotation = 0;
+
+// Hit test: is point near a placed tattoo? Returns index or -1
+function hitTestTattoo(px, py) {
+  for (let i = plantedTattoos.length - 1; i >= 0; i--) {
+    const t = plantedTattoos[i];
+    const dx = px - t.x, dy = py - t.y;
+    const hitR = Math.max(t.w, t.h) / 2 + 10;
+    if (dx * dx + dy * dy <= hitR * hitR) return i;
+  }
+  return -1;
+}
+
+// Sync a tattoo's normalized coords and equity after move/resize
+function syncTattoo(t) {
+  t.nx = (t.x - imgX) / imgW;
+  t.ny = (t.y - imgY) / imgH;
+  const dims = getLogoDims(t.radius);
+  t.w = dims.w; t.h = dims.h;
+  const zone = hitTestZones(t.x, t.y);
+  if (zone) t.zone = zone;
+  else if (isOnBody(t.x, t.y)) t.zone = { name:'Body', desc:'Your canvas.', vis:0.5 };
+  t.equity = calcEquity(t.zone, t.radius);
+}
 
 window.addEventListener('touchstart', e => {
   if (e.touches.length === 1) {
-    mouseX = e.touches[0].clientX;
-    mouseY = e.touches[0].clientY;
-    touchStartX = mouseX;
-    touchStartY = mouseY;
-    mouseOnScreen = false; // Don't show floating logo on mobile
+    const tx = e.touches[0].clientX, ty = e.touches[0].clientY;
+    touchStartX = tx; touchStartY = ty;
     touchMoved = false;
     touchStartTime = Date.now();
+    mouseOnScreen = false;
+
+    // Check delete button on selected tattoo first
+    if (mobileSelected >= 0 && mobileSelected < plantedTattoos.length) {
+      const st = plantedTattoos[mobileSelected];
+      if (st._bx !== undefined) {
+        const ddx = tx - st._bx, ddy = ty - st._by;
+        if (ddx * ddx + ddy * ddy <= st._br * st._br) {
+          plantedTattoos.splice(mobileSelected, 1);
+          mobileSelected = -1;
+          mobileDragging = false;
+          updateClearBtn();
+          updateMobileEquity();
+          return;
+        }
+      }
+    }
+
+    // Check if touching an existing tattoo
+    const hitIdx = hitTestTattoo(tx, ty);
+    if (hitIdx >= 0) {
+      mobileSelected = hitIdx;
+      mobileDragging = true;
+      mobileDragOffX = plantedTattoos[hitIdx].x - tx;
+      mobileDragOffY = plantedTattoos[hitIdx].y - ty;
+      return;
+    }
+
+    // Touching body = place new logo
+    if (isOnBody(tx, ty)) {
+      const zone = hitTestZones(tx, ty) || { name:'Body', desc:'Your canvas.', vis:0.5 };
+      const { w, h } = getLogoDims(tattooRadius);
+      plantedTattoos.push({
+        x: tx, y: ty, w, h,
+        nx: (tx - imgX) / imgW,
+        ny: (ty - imgY) / imgH,
+        rotation: logoRotation,
+        zone: zone,
+        radius: tattooRadius,
+        equity: calcEquity(zone, tattooRadius),
+      });
+      mobileSelected = plantedTattoos.length - 1;
+      mobileDragging = true;
+      mobileDragOffX = 0; mobileDragOffY = 0;
+      updateClearBtn();
+      updateMobileEquity();
+      return;
+    }
+
+    // Tapped off body = deselect
+    mobileSelected = -1;
+    mobileDragging = false;
   }
   if (e.touches.length === 2) {
+    touchMoved = true;
     const dx = e.touches[1].clientX - e.touches[0].clientX;
     const dy = e.touches[1].clientY - e.touches[0].clientY;
     lastPinchDist = Math.hypot(dx, dy);
-    touchMoved = true; // Two fingers = not a tap
+    lastTouchAngle = Math.atan2(dy, dx);
+    // Store base values for selected tattoo or default placement
+    if (mobileSelected >= 0 && mobileSelected < plantedTattoos.length) {
+      pinchBaseRadius = plantedTattoos[mobileSelected].radius;
+      pinchBaseRotation = plantedTattoos[mobileSelected].rotation;
+    } else {
+      pinchBaseRadius = tattooRadius;
+      pinchBaseRotation = logoRotation;
+    }
+    mobileDragging = false; // Switch from drag to pinch
   }
 }, { passive: true });
 
 window.addEventListener('touchmove', e => {
   e.preventDefault();
-  const dx = e.touches[0].clientX - touchStartX;
-  const dy = e.touches[0].clientY - touchStartY;
-  if (Math.abs(dx) > 8 || Math.abs(dy) > 8) touchMoved = true;
+  if (e.touches.length === 1 && mobileDragging && mobileSelected >= 0) {
+    touchMoved = true;
+    const tx = e.touches[0].clientX, ty = e.touches[0].clientY;
+    const nx = tx + mobileDragOffX, ny = ty + mobileDragOffY;
+    const t = plantedTattoos[mobileSelected];
+    // Constrain to body
+    if (isOnBody(nx, ny)) {
+      t.x = nx; t.y = ny;
+      syncTattoo(t);
+    }
+  }
   if (e.touches.length === 2) {
-    const ddx = e.touches[1].clientX - e.touches[0].clientX;
-    const ddy = e.touches[1].clientY - e.touches[0].clientY;
-    const dist = Math.hypot(ddx, ddy);
-    const a = Math.atan2(ddy, ddx);
-    if (lastPinchDist !== null) {
-      tattooRadius = Math.max(8, Math.min(160, tattooRadius * (dist / lastPinchDist)));
+    touchMoved = true;
+    const dx = e.touches[1].clientX - e.touches[0].clientX;
+    const dy = e.touches[1].clientY - e.touches[0].clientY;
+    const dist = Math.hypot(dx, dy);
+    const angle = Math.atan2(dy, dx);
+    const scale = lastPinchDist > 0 ? dist / lastPinchDist : 1;
+    const dAngle = lastTouchAngle !== null ? angle - lastTouchAngle : 0;
+
+    if (mobileSelected >= 0 && mobileSelected < plantedTattoos.length) {
+      // Resize and rotate the selected tattoo
+      const t = plantedTattoos[mobileSelected];
+      t.radius = Math.max(8, Math.min(160, t.radius * scale));
+      t.rotation += dAngle;
+      syncTattoo(t);
+      updateMobileEquity();
+    } else {
+      // Adjust defaults for next placement
+      tattooRadius = Math.max(8, Math.min(160, tattooRadius * scale));
+      logoRotation += dAngle;
     }
-    if (lastTouchAngle !== null) {
-      logoRotation += a - lastTouchAngle;
-    }
-    lastTouchAngle = a;
     lastPinchDist = dist;
+    lastTouchAngle = angle;
   }
 }, { passive: false });
 
 window.addEventListener('touchend', e => {
   if (e.touches.length < 2) { lastTouchAngle = null; lastPinchDist = null; }
   if (e.touches.length === 0) {
-    // Tap = place logo at tap point
-    if (!touchMoved && Date.now() - touchStartTime < 300) {
-      const tx = touchStartX, ty = touchStartY;
-      // Check delete buttons first
-      let deleted = false;
-      for (let i = 0; i < plantedTattoos.length; i++) {
-        const t = plantedTattoos[i];
-        if (t._bx !== undefined) {
-          const ddx = tx - t._bx, ddy = ty - t._by;
-          if (ddx * ddx + ddy * ddy <= (t._br + 12) * (t._br + 12)) {
-            plantedTattoos.splice(i, 1);
-            updateClearBtn();
-            updateMobileEquity();
-            deleted = true;
-            break;
-          }
-        }
-      }
-      if (!deleted) {
-        // Check if tap is on body
-        const zone = hitTestZones(tx, ty);
-        const onBody = isOnBody(tx, ty);
-        const tapZone = zone || (onBody ? { name:'Body', desc:'Your canvas.', vis:0.5 } : null);
-        if (tapZone && onBody) {
-          const { w, h } = getLogoDims(tattooRadius);
-          plantedTattoos.push({
-            x: tx, y: ty, w, h,
-            nx: (tx - imgX) / imgW,
-            ny: (ty - imgY) / imgH,
-            rotation: logoRotation,
-            zone: tapZone,
-            radius: tattooRadius,
-            equity: calcEquity(tapZone, tattooRadius),
-          });
-          updateClearBtn();
-          updateMobileEquity();
-        }
-      }
-    }
-    mouseOnScreen = false;
+    mobileDragging = false;
+    // Update equity display after any interaction
+    updateMobileEquity();
   }
 });
 
@@ -804,6 +899,8 @@ window.addEventListener('touchend', e => {
 function clearAllTattoos() {
   plantedTattoos.length = 0;
   hoverDeleteIdx = -1;
+  mobileSelected = -1;
+  mobileDragging = false;
   updateClearBtn();
   updateMobileEquity();
 }
@@ -825,9 +922,15 @@ function updateMobileEquity() {
     pill.classList.add('active');
     const total = calcTotalEquity();
     const count = plantedTattoos.length;
-    const last = plantedTattoos[count - 1];
+    // Show selected tattoo zone, or summary
+    let label;
+    if (mobileSelected >= 0 && mobileSelected < plantedTattoos.length) {
+      label = plantedTattoos[mobileSelected].zone.name;
+    } else {
+      label = count + ' tattoo' + (count !== 1 ? 's' : '');
+    }
     el.innerHTML =
-      '<span class="meq-zone">' + (count === 1 ? last.zone.name : count + ' tattoos') + '</span>' +
+      '<span class="meq-zone">' + label + '</span>' +
       '<span class="meq-pct">' + total.pct.toFixed(2) + '%</span>' +
       '<span class="meq-usd">' + formatUsd(total.usd) + '</span>';
   }
