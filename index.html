@@ -142,55 +142,46 @@
     display: none;
   }
   .clear-btn:hover { background: #FC5F2B; color: #fff; }
-  .mobile-controls {
-    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
-    z-index: 10; display: none;
-    gap: 8px; align-items: center;
+
+  /* Mobile equity pill — compact one-line bar at bottom */
+  .mobile-equity {
+    display: none; position: fixed; bottom: 0; left: 0; right: 0;
+    z-index: 10; pointer-events: none;
+    padding: 0 16px 16px; /* safe area + padding */
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
   }
-  .mobile-controls button {
-    width: 44px; height: 44px; border-radius: 12px;
-    border: 1px solid #E5E5E5; background: rgba(255,255,255,0.95);
+  .mobile-equity-inner {
+    background: rgba(255,255,255,0.95);
     backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
-    font-family: inherit; font-size: 18px; color: #666;
-    cursor: pointer; display: flex; align-items: center; justify-content: center;
-    transition: background 0.15s;
-    pointer-events: auto;
+    border: 1px solid #EBEBEB; border-radius: 14px;
+    padding: 12px 16px;
   }
-  .mobile-controls button:active { background: #f0f0f0; }
-  .mobile-controls .size-indicator {
-    font-size: 10px; color: #aaa; font-weight: 500;
-    min-width: 32px; text-align: center;
+  .mobile-equity-inner > div {
+    display: flex; align-items: center; justify-content: center;
   }
+  .mobile-equity.active .mobile-equity-inner > div {
+    justify-content: space-between;
+  }
+  .mobile-equity.active .mobile-equity-inner {
+    border-color: rgba(252,95,43,0.3);
+  }
+  .meq-zone { font-size: 13px; font-weight: 700; color: #1a1a1a; }
+  .meq-pct { font-size: 13px; font-weight: 700; color: #FC5F2B; }
+  .meq-usd { font-size: 11px; font-weight: 600; color: #FC5F2B; }
+  .meq-hint { font-size: 11px; color: #ccc; text-align: center; }
 
-  /* Mobile: panel below twin, everything stacked */
   @media (max-width: 768px) {
-    body { overflow: auto; overflow-x: hidden; cursor: default; }
-    .title { top: 16px; left: 20px; }
-    .title svg { height: 18px; }
-    .title .subtitle { font-size: 11px; margin-top: 6px; }
-    .equity-panel {
-      position: fixed; top: auto; bottom: 0; left: 0; right: 0;
-      width: 100%; border-radius: 20px 20px 0 0;
-      padding: 20px 20px 24px; max-height: 45vh;
-      overflow-y: auto; -webkit-overflow-scrolling: touch;
-      pointer-events: auto;
-    }
-    .zone-name { font-size: 20px; min-height: 24px; }
-    .pct-display { font-size: 40px; }
-    .shares-val { font-size: 16px; }
-    .usd-val { font-size: 14px; }
-    .instruction { display: none; }
-    .mobile-controls { display: flex; bottom: auto; top: 16px; right: 20px; left: auto; transform: none; }
-    .clear-btn { bottom: auto; top: 68px; right: 20px; }
-  }
-
-  /* Very small phones */
-  @media (max-width: 390px) {
-    .title { top: 12px; left: 16px; }
+    body { cursor: default; }
+    .title { top: 16px; left: 16px; }
     .title svg { height: 16px; }
-    .title .subtitle { font-size: 10px; }
-    .equity-panel { padding: 16px 16px 20px; }
-    .pct-display { font-size: 36px; }
+    .title .subtitle { font-size: 10px; margin-top: 4px; letter-spacing: 0.1em; }
+    .equity-panel { display: none !important; }
+    .instruction { display: none; }
+    .mobile-equity { display: block; }
+    .clear-btn {
+      position: fixed; top: 16px; right: 16px; bottom: auto;
+      padding: 6px 12px; font-size: 10px; border-radius: 8px;
+    }
   }
 </style>
 </head>
@@ -241,10 +232,10 @@
 
 <button class="clear-btn" id="clearBtn" onclick="clearAllTattoos()">Clear All</button>
 
-<div class="mobile-controls" id="mobileControls">
-  <button onclick="mobileResize(-1)" aria-label="Smaller">&minus;</button>
-  <div class="size-indicator" id="mobileSizeLabel"></div>
-  <button onclick="mobileResize(1)" aria-label="Larger">+</button>
+<div class="mobile-equity" id="mobileEquity">
+  <div class="mobile-equity-inner">
+    <div class="meq-hint" id="meqContent">Tap on the body to place</div>
+  </div>
 </div>
 
 <div class="instruction" id="desktopInstruction">
@@ -330,8 +321,6 @@ function onLoad() {
   logoAspect = logoImg.width / logoImg.height;
   ready = true;
   resize();
-  updateMobileUI();
-  updateMobileSizeLabel();
   requestAnimationFrame(animate);
 }
 
@@ -614,17 +603,17 @@ function resize() {
   canvas.style.height = canvasH + 'px';
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   const mobile = canvasW <= 768;
-  const padY = mobile ? 70 : 50;
-  const padX = mobile ? 10 : 100;
-  // On mobile, reserve bottom space for the panel
-  const padBottom = mobile ? Math.min(canvasH * 0.35, 220) : padY;
-  const maxH = canvasH - padY - padBottom;
+  // Mobile: near full-screen, just thin top margin for logo + tiny bottom for pill
+  const padTop = mobile ? 48 : 50;
+  const padBottom = mobile ? 56 : 50;
+  const padX = mobile ? 4 : 100;
+  const maxH = canvasH - padTop - padBottom;
   const maxW = canvasW - padX * 2;
   const aspect = twinImg.width / twinImg.height;
   if (maxH * aspect <= maxW) { imgH = maxH; imgW = maxH * aspect; }
   else { imgW = maxW; imgH = maxW / aspect; }
   imgX = (canvasW - imgW) / 2;
-  imgY = mobile ? padY : (canvasH - imgH) / 2;
+  imgY = padTop + (maxH - imgH) / 2;
   createBodyMask();
   // Recompute screen positions for planted tattoos from normalized coords
   for (const t of plantedTattoos) {
@@ -719,88 +708,92 @@ window.addEventListener('keydown', e => {
   if (e.key === ']') logoRotation += Math.PI / 12;
 });
 
-// Touch support — enhanced for mobile
+// Touch support
 let lastTouchAngle = null;
 let lastPinchDist = null;
 let touchMoved = false;
 let touchStartTime = 0;
+let touchStartX = 0, touchStartY = 0;
 
 window.addEventListener('touchstart', e => {
   if (e.touches.length === 1) {
     mouseX = e.touches[0].clientX;
     mouseY = e.touches[0].clientY;
-    mouseOnScreen = true;
+    touchStartX = mouseX;
+    touchStartY = mouseY;
+    mouseOnScreen = false; // Don't show floating logo on mobile
     touchMoved = false;
     touchStartTime = Date.now();
-    // Immediately update smooth position for responsiveness
-    smoothX = mouseX;
-    smoothY = mouseY;
   }
   if (e.touches.length === 2) {
     const dx = e.touches[1].clientX - e.touches[0].clientX;
     const dy = e.touches[1].clientY - e.touches[0].clientY;
     lastPinchDist = Math.hypot(dx, dy);
+    touchMoved = true; // Two fingers = not a tap
   }
 }, { passive: true });
 
 window.addEventListener('touchmove', e => {
   e.preventDefault();
-  touchMoved = true;
-  if (e.touches.length === 1) {
-    mouseX = e.touches[0].clientX;
-    mouseY = e.touches[0].clientY;
-  }
+  const dx = e.touches[0].clientX - touchStartX;
+  const dy = e.touches[0].clientY - touchStartY;
+  if (Math.abs(dx) > 8 || Math.abs(dy) > 8) touchMoved = true;
   if (e.touches.length === 2) {
-    const dx = e.touches[1].clientX - e.touches[0].clientX;
-    const dy = e.touches[1].clientY - e.touches[0].clientY;
-    const dist = Math.hypot(dx, dy);
-    const a = Math.atan2(dy, dx);
+    const ddx = e.touches[1].clientX - e.touches[0].clientX;
+    const ddy = e.touches[1].clientY - e.touches[0].clientY;
+    const dist = Math.hypot(ddx, ddy);
+    const a = Math.atan2(ddy, ddx);
     if (lastPinchDist !== null) {
-      const scale = dist / lastPinchDist;
-      tattooRadius = Math.max(8, Math.min(160, tattooRadius * scale));
+      tattooRadius = Math.max(8, Math.min(160, tattooRadius * (dist / lastPinchDist)));
     }
     if (lastTouchAngle !== null) {
       logoRotation += a - lastTouchAngle;
     }
     lastTouchAngle = a;
     lastPinchDist = dist;
-    // Center cursor between two fingers
-    mouseX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-    mouseY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
   }
 }, { passive: false });
 
 window.addEventListener('touchend', e => {
   if (e.touches.length < 2) { lastTouchAngle = null; lastPinchDist = null; }
   if (e.touches.length === 0) {
-    // Tap to place (short touch, didn't move far)
+    // Tap = place logo at tap point
     if (!touchMoved && Date.now() - touchStartTime < 300) {
+      const tx = touchStartX, ty = touchStartY;
       // Check delete buttons first
       let deleted = false;
       for (let i = 0; i < plantedTattoos.length; i++) {
         const t = plantedTattoos[i];
         if (t._bx !== undefined) {
-          const ddx = mouseX - t._bx, ddy = mouseY - t._by;
-          if (ddx * ddx + ddy * ddy <= (t._br + 8) * (t._br + 8)) {
+          const ddx = tx - t._bx, ddy = ty - t._by;
+          if (ddx * ddx + ddy * ddy <= (t._br + 12) * (t._br + 12)) {
             plantedTattoos.splice(i, 1);
             updateClearBtn();
+            updateMobileEquity();
             deleted = true;
             break;
           }
         }
       }
-      if (!deleted && logoOnBody && activeZone) {
-        const { w, h } = getLogoDims(tattooRadius);
-        plantedTattoos.push({
-          x: smoothX, y: smoothY, w, h,
-          nx: (smoothX - imgX) / imgW,
-          ny: (smoothY - imgY) / imgH,
-          rotation: logoRotation,
-          zone: activeZone,
-          radius: tattooRadius,
-          equity: calcEquity(activeZone, tattooRadius),
-        });
-        updateClearBtn();
+      if (!deleted) {
+        // Check if tap is on body
+        const zone = hitTestZones(tx, ty);
+        const onBody = isOnBody(tx, ty);
+        const tapZone = zone || (onBody ? { name:'Body', desc:'Your canvas.', vis:0.5 } : null);
+        if (tapZone && onBody) {
+          const { w, h } = getLogoDims(tattooRadius);
+          plantedTattoos.push({
+            x: tx, y: ty, w, h,
+            nx: (tx - imgX) / imgW,
+            ny: (ty - imgY) / imgH,
+            rotation: logoRotation,
+            zone: tapZone,
+            radius: tattooRadius,
+            equity: calcEquity(tapZone, tattooRadius),
+          });
+          updateClearBtn();
+          updateMobileEquity();
+        }
       }
     }
     mouseOnScreen = false;
@@ -812,6 +805,7 @@ function clearAllTattoos() {
   plantedTattoos.length = 0;
   hoverDeleteIdx = -1;
   updateClearBtn();
+  updateMobileEquity();
 }
 
 function updateClearBtn() {
@@ -819,28 +813,24 @@ function updateClearBtn() {
   btn.style.display = plantedTattoos.length > 0 ? 'block' : 'none';
 }
 
-// Mobile resize controls
-function mobileResize(dir) {
-  tattooRadius = Math.max(8, Math.min(160, tattooRadius + dir * 8));
-  updateMobileSizeLabel();
-}
-function updateMobileSizeLabel() {
-  const el = document.getElementById('mobileSizeLabel');
-  if (el) el.textContent = getInches(tattooRadius) + '"';
-}
-
-// Show/hide mobile controls based on screen size
-function updateMobileUI() {
-  const mobile = window.innerWidth <= 768;
-  const mc = document.getElementById('mobileControls');
-  const di = document.getElementById('desktopInstruction');
-  const msg = document.getElementById('emptyMsg');
-  if (mc) mc.style.display = mobile ? 'flex' : 'none';
-  if (di) di.style.display = mobile ? 'none' : 'block';
-  if (msg) msg.innerHTML = mobile
-    ? 'Tap on the body<br>to place the Superpower logo'
-    : 'Move the Superpower logo<br>over the body & click to place';
-  if (!isMobile) document.body.style.cursor = mobile ? 'default' : 'none';
+// Mobile equity pill update
+function updateMobileEquity() {
+  const el = document.getElementById('meqContent');
+  const pill = document.getElementById('mobileEquity');
+  if (!el || !pill) return;
+  if (plantedTattoos.length === 0) {
+    pill.classList.remove('active');
+    el.innerHTML = '<span class="meq-hint">Tap on the body to place</span>';
+  } else {
+    pill.classList.add('active');
+    const total = calcTotalEquity();
+    const count = plantedTattoos.length;
+    const last = plantedTattoos[count - 1];
+    el.innerHTML =
+      '<span class="meq-zone">' + (count === 1 ? last.zone.name : count + ' tattoos') + '</span>' +
+      '<span class="meq-pct">' + total.pct.toFixed(2) + '%</span>' +
+      '<span class="meq-usd">' + formatUsd(total.usd) + '</span>';
+  }
 }
 
 let lastTime = performance.now();
@@ -860,7 +850,5 @@ function animate(now) {
   requestAnimationFrame(animate);
 }
 
-window.addEventListener('resize', () => { resize(); updateMobileUI(); });
-updateMobileUI();
-updateMobileSizeLabel();
+window.addEventListener('resize', resize);
 </script></body></html>
