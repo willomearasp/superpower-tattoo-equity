@@ -824,19 +824,13 @@ window.addEventListener('touchstart', e => {
     touchStartTime = Date.now();
     mouseOnScreen = false;
 
-    // Single logo mode: always select the one logo
+    // Single logo mode: any touch anywhere moves the logo (relative)
     if (plantedTattoos.length > 0) {
       mobileSelected = 0;
-      const t = plantedTattoos[0];
-      // Check if touching near the logo — start drag
-      const hitIdx = hitTestTattoo(tx, ty);
-      if (hitIdx >= 0) {
-        mobileDragging = true;
-        mobileDragOffX = t.x - tx;
-        mobileDragOffY = t.y - ty;
-      } else {
-        mobileDragging = false;
-      }
+      mobileDragging = true;
+      // Offset so logo moves relative to where you touch, not snapping to finger
+      mobileDragOffX = plantedTattoos[0].x - tx;
+      mobileDragOffY = plantedTattoos[0].y - ty;
     }
   }
 
