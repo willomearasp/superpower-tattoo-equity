@@ -224,7 +224,7 @@
   <div id="emptyContent" class="empty-state">
     <div class="msg" id="emptyMsg">Move the Superpower logo<br>over the body & click to place</div>
   </div>
-  <div class="valuation">Based on $300M valuation<br>10% max equity = $30M</div>
+  <div class="valuation">Based on $300M valuation<br>1% max equity = $3M</div>
 </div>
 
 <button class="clear-btn" id="clearBtn" onclick="clearAllTattoos()">Clear All</button>
@@ -278,10 +278,11 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
 const VALUATION = 300000000;
-const MAX_EQUITY_PCT = 10;
-const MAX_VIS = 2.5;
-const MAX_SIZE_MULT = 3.0;
-const TOTAL_POOL_SHARES = 10000;
+const POOL_PCT = 10;             // 10% of company is the equity pool
+const MAX_INDIVIDUAL_PCT = 1;    // max anyone can earn = 1% (full-size forehead)
+const MAX_VIS = 1.0;             // face = 1.0 (reference)
+const MAX_SIZE_MULT = 1.0;
+const TOTAL_POOL_SHARES = 10000; // total shares in the 10% pool
 
 const isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
 
@@ -462,26 +463,28 @@ function logoFullyOnBody(cx, cy, w, h, rot) {
   return true;
 }
 
+// Clothed visibility: how visible is this zone day-to-day?
+// Face = 1.0 reference. Full-size forehead = 1% equity (the max).
 const ZONES_NORM = [
-  { name:'Face', desc:'Maximum commitment. Maximum equity.', vis:2.5, cx:0.500, cy:0.092, rx:0.050, ry:0.038 },
-  { name:'Neck', desc:"Can't hide this one.", vis:2.0, cx:0.500, cy:0.152, rx:0.038, ry:0.015 },
-  { name:'Hand', desc:'Always on display.', vis:1.6, cx:0.165, cy:0.545, rx:0.048, ry:0.038 },
-  { name:'Hand', desc:'Always on display.', vis:1.6, cx:0.835, cy:0.545, rx:0.048, ry:0.038 },
-  { name:'Forearm', desc:'Perpetual billboard.', vis:1.3, cx:0.190, cy:0.425, rx:0.045, ry:0.075 },
-  { name:'Forearm', desc:'Perpetual billboard.', vis:1.3, cx:0.810, cy:0.425, rx:0.045, ry:0.075 },
-  { name:'Shoulder', desc:'Tank top territory.', vis:1.1, cx:0.270, cy:0.192, rx:0.058, ry:0.030 },
-  { name:'Shoulder', desc:'Tank top territory.', vis:1.1, cx:0.730, cy:0.192, rx:0.058, ry:0.030 },
-  { name:'Upper Arm', desc:'Classic placement.', vis:0.9, cx:0.220, cy:0.272, rx:0.055, ry:0.065 },
-  { name:'Upper Arm', desc:'Classic placement.', vis:0.9, cx:0.780, cy:0.272, rx:0.055, ry:0.065 },
-  { name:'Chest', desc:'Beach reveal.', vis:0.8, cx:0.500, cy:0.235, rx:0.140, ry:0.038 },
-  { name:'Core', desc:'Seasonal exposure.', vis:0.5, cx:0.500, cy:0.335, rx:0.105, ry:0.052 },
-  { name:'Hip', desc:'Very select audience.', vis:0.35, cx:0.500, cy:0.430, rx:0.120, ry:0.030 },
-  { name:'Thigh', desc:'Shorts required.', vis:0.4, cx:0.410, cy:0.545, rx:0.058, ry:0.080 },
-  { name:'Thigh', desc:'Shorts required.', vis:0.4, cx:0.590, cy:0.545, rx:0.058, ry:0.080 },
-  { name:'Calf', desc:'Depends on the shorts.', vis:0.45, cx:0.395, cy:0.740, rx:0.040, ry:0.075 },
-  { name:'Calf', desc:'Depends on the shorts.', vis:0.45, cx:0.605, cy:0.740, rx:0.040, ry:0.075 },
-  { name:'Foot', desc:'Flip flop flex.', vis:0.3, cx:0.380, cy:0.900, rx:0.048, ry:0.028 },
-  { name:'Foot', desc:'Flip flop flex.', vis:0.3, cx:0.620, cy:0.900, rx:0.048, ry:0.028 },
+  { name:'Face',      desc:"Can't cover this. Maximum equity.",  vis:1.0,  cx:0.500, cy:0.092, rx:0.050, ry:0.038 },
+  { name:'Neck',      desc:'Always visible. High commitment.',   vis:0.85, cx:0.500, cy:0.152, rx:0.038, ry:0.015 },
+  { name:'Hand',      desc:'Always on display.',                 vis:0.50, cx:0.165, cy:0.545, rx:0.048, ry:0.038 },
+  { name:'Hand',      desc:'Always on display.',                 vis:0.50, cx:0.835, cy:0.545, rx:0.048, ry:0.038 },
+  { name:'Forearm',   desc:'Rolled sleeves territory.',          vis:0.40, cx:0.190, cy:0.425, rx:0.045, ry:0.075 },
+  { name:'Forearm',   desc:'Rolled sleeves territory.',          vis:0.40, cx:0.810, cy:0.425, rx:0.045, ry:0.075 },
+  { name:'Shoulder',  desc:'Tank top reveal.',                   vis:0.30, cx:0.270, cy:0.192, rx:0.058, ry:0.030 },
+  { name:'Shoulder',  desc:'Tank top reveal.',                   vis:0.30, cx:0.730, cy:0.192, rx:0.058, ry:0.030 },
+  { name:'Upper Arm', desc:'T-shirt line.',                      vis:0.30, cx:0.220, cy:0.272, rx:0.055, ry:0.065 },
+  { name:'Upper Arm', desc:'T-shirt line.',                      vis:0.30, cx:0.780, cy:0.272, rx:0.055, ry:0.065 },
+  { name:'Chest',     desc:'Big canvas. Beach & gym reveal.',    vis:0.55, cx:0.500, cy:0.235, rx:0.140, ry:0.038 },
+  { name:'Core',      desc:'Seasonal exposure only.',            vis:0.20, cx:0.500, cy:0.335, rx:0.105, ry:0.052 },
+  { name:'Hip',       desc:'Very select audience.',              vis:0.10, cx:0.500, cy:0.430, rx:0.120, ry:0.030 },
+  { name:'Thigh',     desc:'Shorts required.',                   vis:0.22, cx:0.410, cy:0.545, rx:0.058, ry:0.080 },
+  { name:'Thigh',     desc:'Shorts required.',                   vis:0.22, cx:0.590, cy:0.545, rx:0.058, ry:0.080 },
+  { name:'Calf',      desc:'Depends on the shorts.',             vis:0.25, cx:0.395, cy:0.740, rx:0.040, ry:0.075 },
+  { name:'Calf',      desc:'Depends on the shorts.',             vis:0.25, cx:0.605, cy:0.740, rx:0.040, ry:0.075 },
+  { name:'Foot',      desc:'Flip flop flex.',                    vis:0.08, cx:0.380, cy:0.900, rx:0.048, ry:0.028 },
+  { name:'Foot',      desc:'Flip flop flex.',                    vis:0.08, cx:0.620, cy:0.900, rx:0.048, ry:0.028 },
 ];
 
 function hitTestZones(x, y) {
@@ -501,15 +504,15 @@ function getInches(r) {
 
 function getSizeMult(r) {
   const t = Math.max(0, Math.min(1, (r - 8) / 152));
-  return 0.3 + t * t * 2.7;
+  return 0.05 + t * 0.95; // linear: tiny = 0.05, max = 1.0
 }
 
 function calcEquity(zone, radius) {
   if (!zone) return null;
   const sm = getSizeMult(radius);
-  const pct = (zone.vis * sm) / (MAX_VIS * MAX_SIZE_MULT) * MAX_EQUITY_PCT;
+  const pct = (zone.vis * sm) / (MAX_VIS * MAX_SIZE_MULT) * MAX_INDIVIDUAL_PCT;
   const usd = pct / 100 * VALUATION;
-  const shares = Math.round(pct / MAX_EQUITY_PCT * TOTAL_POOL_SHARES);
+  const shares = Math.round(pct / POOL_PCT * TOTAL_POOL_SHARES);
   return { shares, usd: Math.round(usd), pct };
 }
 
@@ -554,7 +557,7 @@ function draw() {
       if (mobileLogoOnBody) {
         const zone = hitTestZones(t.x, t.y);
         if (zone) t.zone = zone;
-        else if (isOnBody(t.x, t.y)) t.zone = { name: 'Body', desc: 'Your canvas.', vis: 0.5 };
+        else if (isOnBody(t.x, t.y)) t.zone = { name: 'Body', desc: 'Your canvas.', vis: 0.15};
         t.equity = calcEquity(t.zone, t.radius);
       }
 
@@ -829,7 +832,7 @@ function syncTattoo(t) {
   t.w = dims.w; t.h = dims.h;
   const zone = hitTestZones(t.x, t.y);
   if (zone) t.zone = zone;
-  else if (isOnBody(t.x, t.y)) t.zone = { name: 'Body', desc: 'Your canvas.', vis: 0.5 };
+  else if (isOnBody(t.x, t.y)) t.zone = { name: 'Body', desc: 'Your canvas.', vis: 0.15};
   t.equity = calcEquity(t.zone, t.radius);
 }
 
@@ -968,7 +971,7 @@ function updateMobileEquity() {
 
   if (onBody) {
     pill.classList.add('active');
-    const zone = t.zone || { name: 'Body', vis: 0.5 };
+    const zone = t.zone || { name: 'Body', vis: 0.15};
     const eq = t.equity || calcEquity(zone, t.radius);
     el.innerHTML =
       '<span class="meq-zone">' + zone.name + '</span>' +
