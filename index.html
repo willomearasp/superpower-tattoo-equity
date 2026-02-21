@@ -327,13 +327,32 @@ function getLogoCache(w, h) {
   const ph = Math.ceil(h * dpr);
   const key = pw + 'x' + ph;
   if (logoCacheCanvas && logoCacheKey === key) return logoCacheCanvas;
+  // Progressive downscale: halve repeatedly then final resize
+  // Single-step 6x downscale = blurry; stepped halving = crisp
+  let src = logoImg;
+  let sw = logoImg.width;
+  let sh = logoImg.height;
+  while (sw > pw * 2 || sh > ph * 2) {
+    const stepW = Math.max(pw, Math.ceil(sw / 2));
+    const stepH = Math.max(ph, Math.ceil(sh / 2));
+    const step = document.createElement('canvas');
+    step.width = stepW;
+    step.height = stepH;
+    const sctx = step.getContext('2d');
+    sctx.imageSmoothingEnabled = true;
+    sctx.imageSmoothingQuality = 'high';
+    sctx.drawImage(src, 0, 0, stepW, stepH);
+    src = step;
+    sw = stepW;
+    sh = stepH;
+  }
   logoCacheCanvas = document.createElement('canvas');
   logoCacheCanvas.width = pw;
   logoCacheCanvas.height = ph;
   const lctx = logoCacheCanvas.getContext('2d');
   lctx.imageSmoothingEnabled = true;
   lctx.imageSmoothingQuality = 'high';
-  lctx.drawImage(logoImg, 0, 0, pw, ph);
+  lctx.drawImage(src, 0, 0, pw, ph);
   logoCacheKey = key;
   return logoCacheCanvas;
 }
